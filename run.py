@@ -32,17 +32,17 @@ def init(name):
     nsteps = 25  # in-between tracks: 12 # old tracks: 25 
 
     # Number of steps to divide model output for outputting drifter location
-    N = 5
+    N = 15
 
     # Number of days
     ndays = 10
 
     # This is a forward-moving simulation
-    ff = 1 
+    ff = 1
 
     # Time between outputs
     tseas = 4*3600 # 4 hours between outputs, in seconds, time between model outputs 
-    ah = 5. # old tracks: 5.
+    ah = 20. # old tracks: 5.
     av = 0. # m^2/s
 
     # surface drifters
@@ -51,20 +51,36 @@ def init(name):
 
     # for 3d flag, do3d=0 makes the run 2d and do3d=1 makes the run 3d
     do3d = 0
-    doturb = 2
+    doturb = 1
 
     # Flag for streamlines.
     dostream = 0
 
+    # Have windage input as an array of values that change in time.
+    # looks like oil was in slick form for 2 days, then tarballs
+    # want an entry for windage for each circulation model output used
+    nmodelperday = 24./(tseas/3600.)  # number of model outputs per day
+    W = 0.03  # start at 5%, ramp down after 2 days, over a day, to zero
+    Wdays = 3  # windage days
+    windage = np.empty(ndays*nmodelperday + 1)  # extra entry for bounding edge
+    # windage[:] = W  # constant windage
+    windage[:Wdays*nmodelperday] = W  # 3% for two days
+    # ramp down over 1 day
+    windage[Wdays*nmodelperday:Wdays*nmodelperday+1*nmodelperday] = W - (W/nmodelperday)*np.arange(1, nmodelperday+1)
+    # then zero
+    windage[Wdays*nmodelperday+1*nmodelperday:] = 0.
+
+    deflection = 7
+
     # Initialize Tracpy class
     tp = Tracpy(loc, name=name, tseas=tseas, ndays=ndays, nsteps=nsteps, dostream=dostream, savell=False, doperiodic=0, 
                 N=N, ff=ff, ah=ah, av=av, doturb=doturb, do3d=do3d, z0=z0, zpar=zpar, 
-                time_units=time_units, usebasemap=True, grid=grid)
+                time_units=time_units, usebasemap=True, grid=grid, windage=windage, deflection=deflection)
 
-    llcrnrlon = -94.768091; urcrnrlon = -94.670588; llcrnrlat = 29.299671; urcrnrlat = 29.400220; # New
+    llcrnrlon = -94.738918; urcrnrlon = -94.627218; llcrnrlat = 29.332186; urcrnrlat = 29.368367; # New
     xcrnrs, ycrnrs = grid['basemap']([llcrnrlon, urcrnrlon], [llcrnrlat, urcrnrlat])
-    X, Y = np.meshgrid(np.arange(xcrnrs[0], xcrnrs[1], 700), 
-                        np.arange(ycrnrs[0], ycrnrs[1], 700))
+    X, Y = np.meshgrid(np.arange(xcrnrs[0], xcrnrs[1], 100), 
+                        np.arange(ycrnrs[0], ycrnrs[1], 100))
     lon0, lat0 = grid['basemap'](X, Y, inverse=True)
     # Eliminate points that are outside domain or in masked areas
     lon0, lat0 = tracpy.tools.check_points(lon0, lat0, grid)
@@ -79,7 +95,7 @@ def run():
 
     # CST to GMT. started at 12:30pm CST
     overallstartdate = datetime(2014, 3, 22, 16, 0)
-    overallstopdate = datetime(2014, 3, 23, 12, 0)
+    overallstopdate = datetime(2014, 3, 23, 0, 0)
 
     date = overallstartdate
 
@@ -90,7 +106,7 @@ def run():
         os.makedirs('figures')
 
     # loop through state dates
-    while date < overallstopdate:
+    while date <= overallstopdate:
 
         name = date.isoformat()[0:13]
 
